@@ -1,0 +1,202 @@
+#!/bin/bash
+
+# pupdate - your update fetching friend 🐶
+
+# MIT License
+
+# Copyright (C) 2018  Steven Stockhamer
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# TODO: with/without restart (auto restart?)
+#   if [[ $string =~ "[restart]" ]]; then
+
+# TODO: quieter by default, only tell the user what they care about
+#  like: brew caveats, doctor errors, need to restart
+
+readonly VERSION="0.0.1"
+readonly URL="https://github.com/stevestock/pupdate"
+
+# only run self-update commands if not managed by homebrew
+readonly ALL_SUPPORTED_CMDS=(
+  "n" #sudo
+  "npm" #sudo
+  "softwareupdate" #sudo, restart
+  "brew" #invalidates sudo, must go after sudos
+  "yarn"
+  "gem"
+  "apm"
+  "sdkmanager"
+  "composer" #self-update
+  "mas"
+  "pip"
+  "pip3"
+)
+
+COMMANDS_AVAILABLE=()
+COMMANDS_NOT_AVAILABLE=()
+
+# https://stackoverflow.com/a/23342259
+echo_and_run() {
+  if [[ "$SILENT" = true ]]; then
+    if [[ "$1" = softwareupdate ]]; then
+      # softwareupdate writes "No updates are available." to stderr
+      "$@" >/dev/null 2>&1
+    else
+      "$@" >/dev/null
+    fi
+  else
+    echo "🐶 $*"
+    "$@"
+  fi
+}
+
+display_help () {
+  echo
+  echo "pupdate v$VERSION - your update fetching friend 🐶"
+  echo "© 2018 Steven Stockhamer, $URL"
+  echo
+  echo "Usage: pupdate [OPTIONS]"
+  echo
+  echo "Options:"
+  echo "   -h            help"
+  echo "   -l            list"
+  echo "   -s            silent"
+  echo "   -V            version"
+}
+
+display_list() {
+  for command in "${COMMANDS_AVAILABLE[@]}"; do
+    echo "✓ $command"
+  done
+
+  echo
+
+  for command in "${COMMANDS_NOT_AVAILABLE[@]}"; do
+    echo "✗ $command"
+  done
+}
+
+while getopts ":hlsV" opt; do
+  case $opt in
+    h) display_help; exit 0 ;;
+    l) LIST=true ;;
+    s) SILENT=true ;;
+    V) echo "$VERSION"; exit 0 ;;
+    \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+  esac
+done
+
+readonly LIST
+readonly SILENT
+
+# check which commands are available
+for command in "${ALL_SUPPORTED_CMDS[@]}"; do
+  if [[ -x "$(command -v "$command")" ]]; then
+    COMMANDS_AVAILABLE+=("$command")
+  else
+    COMMANDS_NOT_AVAILABLE+=("$command")
+  fi
+done
+
+if [[ "$LIST" = true ]]; then
+  display_list; exit 0
+fi
+
+# ask for a password upfront
+sudo -v
+
+# Keep-alive: update existing sudo time stamp if set, otherwise do nothing.
+# Note that this doesn't work with Homebrew, since brew explicitly invalidates
+# the sudo timestamp, which is probably wise.
+# See https://gist.github.com/cowboy/3118588
+while true; do sudo -n true; sleep 10; kill -0 "$$" || exit; done 2>/dev/null &
+
+# perform updates for each available command
+for command in "${COMMANDS_AVAILABLE[@]}"; do
+  case "$command" in
+      n) # n node version manager <https://github.com/tj/n>
+        echo_and_run sudo n latest
+        echo_and_run sudo n prune
+        ;;
+      npm) # npm - JavaScript (Node) Package Manager <https://www.npmjs.com>
+        echo_and_run sudo npm update -g
+        ;;
+      brew) # Homebrew - MacOS Package Manager <https://brew.sh>
+        echo_and_run brew update
+        echo_and_run brew upgrade
+        # occassional permissions issues
+        # https://stackoverflow.com/a/46844441/884677
+        echo_and_run brew cask upgrade
+        echo_and_run brew cleanup -s
+        echo_and_run brew cask cleanup
+        echo_and_run brew prune
+        echo_and_run brew doctor
+        ;;
+      gem) # RubyGems <https://rubygems.org>
+        echo_and_run gem update --system
+        echo_and_run gem update
+        echo_and_run gem cleanup
+        ;;
+      softwareupdate) # Mac OS ($man softwareupdate)
+        echo_and_run sudo softwareupdate --install --all
+        ;;
+      apm) # Atom Package Manager <https://github.com/atom/apm>
+        echo_and_run apm upgrade --no-confirm
+        ;;
+      # Android <https://developer.android.com/studio/command-line/sdkmanager>
+      sdkmanager) 
+        echo_and_run sdkmanager --update
+        ;;
+      composer)
+        if [[ ! $(brew list) =~ "composer"[[:space:]] ]]; then
+          echo_and_run php composer.phar self-update
+        fi
+        if [[ -f "$HOME/.composer/composer.json" ]]; then
+          echo_and_run composer global update
+        fi
+        ;;
+      mas)
+        echo_and_run mas upgrade
+        ;;
+      yarn)
+        echo_and_run yarn global upgrade --silent
+        ;;
+      pip)
+        echo "🐶 Updating pip packages"
+        # echo_and_run doens't handle pipes gracefully, too long anyway
+        pip list --outdated --format=freeze --local \
+          | grep -v '^\-e' \
+          | cut -d = -f 1  \
+          | xargs -n1 pip install -U
+        ;;
+      pip3)
+        echo "🐶 Updating pip3 packages"
+        # echo_and_run doens't handle pipes gracefully, too long anyway
+        pip3 list --outdated --format=freeze --local \
+        | grep -v '^\-e' \
+        | cut -d = -f 1 \
+        | xargs -n1 pip3 install -U
+        ;;
+      *)
+        echo "unexpected command: $command" >&2; exit 1
+  esac
+done
+
+exit 0
