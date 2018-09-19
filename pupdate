@@ -144,8 +144,7 @@ for command in "${COMMANDS_AVAILABLE[@]}"; do
         # occassional permissions issues
         # https://stackoverflow.com/a/46844441/884677
         echo_and_run brew cask upgrade
-        echo_and_run brew cleanup -s
-        echo_and_run brew cask cleanup
+        echo_and_run brew cleanup -self
         echo_and_run brew prune
         echo_and_run brew doctor
         ;;
