@@ -149,8 +149,8 @@ for command in "${COMMANDS_AVAILABLE[@]}"; do
         echo_and_run brew doctor
         ;;
       gem) # RubyGems <https://rubygems.org>
-        echo_and_run gem update --system
-        echo_and_run gem update
+        echo_and_run sudo gem update --system
+        echo_and_run sudo gem update
         echo_and_run gem cleanup
         ;;
       softwareupdate) # Mac OS ($man softwareupdate)
