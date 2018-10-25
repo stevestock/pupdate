@@ -83,7 +83,7 @@ display_help () {
 
 display_list() {
   for command in "${COMMANDS_AVAILABLE[@]}"; do
-    if [ "$(uname)" == "Darwin" ] && [ "$command" == "gem" ] && [ $(which gem) == "/usr/bin/gem" ]; then
+    if [ "$(uname)" == "Darwin" ] && [ "$command" == "gem" ] && [ "$(command -v gem)" == "/usr/bin/gem" ]; then
       echo "✓ gem (OSX native)"
     else
       echo "✓ $command"
@@ -153,7 +153,7 @@ for command in "${COMMANDS_AVAILABLE[@]}"; do
         echo_and_run brew doctor
         ;;
       gem) # RubyGems <https://rubygems.org>
-        if [ "$(uname)" == "Darwin" ] && [ $(which gem) == "/usr/bin/gem" ]; then
+        if [ "$(uname)" == "Darwin" ] && [ "$(command -v gem)" == "/usr/bin/gem" ]; then
           echo_and_run sudo gem update --system
           echo "🐶 [skipping sudo gem update for native OSX ruby]"
           echo_and_run sudo gem cleanup
